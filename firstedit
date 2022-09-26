@@ -1,0 +1,160 @@
+'''это модуль классификации состояния элемента на основе экспертных правил, обращение к файлу .csv'''
+
+from kbs import db
+from kbs import Elements
+from kbs import Parametres
+
+import csv
+import math
+
+def rulesappl(id):
+    #обращение к таблицам БД
+    ab = Parametres.query.filter(Parametres.user_id.endswith(id)).all() #обращение к таблице базы экспертных правил к состояниям конкретного элемента
+    an = Elements.query.filter_by(id=id).first() #обращение к таблице элементов объекта
+    a = an.element #возврат имени элемента по id, имя должно совпадать с имененм в источнике показателей параметров
+    itog_list = [] #назначение списка для формирования вектора состояния элемента
+    for st in ab: #цикл сопоставления значений параметров актульных с заданными в БЗ
+        #преобразование данных из таблицы правил БЗ в "словарь": имя параметра - значения
+        parc = st.values.split(sep=',') #значения параметров в таблице БЗ (список)
+        #print(parc)
+        s = st.parametres.split(sep=',') #имена параметров в таблице БЗ (список)
+        aa = dict(zip(parc, s)) #формирование словаря
+        #print(parc)
+        with open("/Users/Public/files/parametres.csv") as r_file: #обращение к CSV файлу с актуальными значениями параметров
+            file_reader = csv.DictReader(r_file, delimiter=",") #в файле имяэлемента,показательN1,показательN2... разделитель - запятая","
+            new_list = [] #назначение списка для проверки совпадения параметров с параметрами из БЗ в формате [+-]. если параметр совпал, значит +, если нет -
+            try:
+                    for row in file_reader: #цикл по каждой строке в CSV файле
+                        if row["name"] == a: #сопоставление имени элемента со строкой, имя должно совпадать с имененм в БЗ
+                            for each in parc: #цикл по каждой строке в CSV файле
+                                #действия правил ЕСЛИ, ТО зависят от наличия в строке символов ниже перечисленных
+                                if "=" in each:
+                                    if str(row[aa.get(each)]) == str(each.replace("=", "")): #логическое правило на основе равно= ли актуальное значение параметра парамтеру в базе
+                                        sv = "+"
+                                    else:
+                                        sv = "-"
+                                    new_list.append(sv) #добавляется + в случае соответствия актуального параметра значению в БЗ соответствующего состояния и - в случае несоответсвия
+                                elif "-" in each: #логическое правило проверки принадлежности к числовому диапазону (например, проверка 7 на принадлежность к диапазону 5-10)
+                                    if int(f'{row[aa.get(each)]}') <= int('-'.join((each.split("-"))[1:])) and int(
+                                            f'{row[aa.get(each)]}') > int('-'.join((each.split("-"))[:1])):
+                                        sv = "+"
+                                    else:
+                                        sv = "-"
+                                    new_list.append(sv)
+                                elif "<" in each: #логическое правило проверки меньше
+                                    if int(f'{row[aa.get(each)]}') < int(each.replace("<", "")):
+                                        sv = "+"
+                                    else:
+                                        sv = "-"
+                                    new_list.append(sv)
+                                elif ">" in each: #логическое правило проверки больше
+                                    if int(f'{row[aa.get(each)]}') >= int(each.replace(">", "")):
+                                        sv = "+"
+                                    else:
+                                        sv = "-"
+                                    new_list.append(sv)
+                                else:
+                                    new_list.append("отсутствует")
+            except:
+                print("Значения параметров отсутствуют") #в случае отсутствия в файле CSV ожидаемых форматов данных или при полном их отсутствии
+            #print(new_list, st.condition, st.state)
+            # вывод векторов One-hot коддинг на основе проведенной проверки совпадения актуальных параметров и парамтеров из БЗ, соответсвующих определенному состоянию:
+            # при этом проверяются условия: st.condition - уточнение строгого равенства - обязаны ли все показатели сойтись (st.condition == "0")
+            # или достаточно лишь одного показателя для принятия этого состояния (st.condition == "1")
+            if st.condition == "0" and "-" not in new_list:
+                didi = 1
+                #print(st.state)
+                try:
+                    logs = open("logs.txt", "a")
+                    try:
+                        logs.write(st.state)
+                        actstate = Elements.query.get(id)
+                        try:  # запись в БЗ Elements актуального состояния элемента
+                            actstate.actualstate = st.state
+                            db.session.commit()
+                        except:
+                            db.session.rollback()
+                            return "Очко"
+                    finally:
+                        logs.close()
+                except FileNotFoundError:
+                    print("Невозможно открыть файл")
+            elif st.condition == "1" and "+" in new_list:
+                didi = 1
+                #print(st.state)
+                try:
+                    logs = open("logs.txt", "a")
+                    try:
+                        logs.write(st.state)
+                        actstate = Elements.query.get(id)
+                        try:  # запись в БЗ Elements актуального состояния элемента
+                            actstate.actualstate = st.state
+                            db.session.commit()
+                        except:
+                            db.session.rollback()
+                            return "Очко"
+                    finally:
+                        logs.close()
+                except FileNotFoundError:
+                    print("Невозможно открыть файл")
+            elif st.condition == " " and "-" not in new_list:
+                didi = 1
+                #print(st.state)
+                try:
+                    logs = open("logs.txt", "a")
+                    try:
+                        logs.write(st.state)
+                        actstate = Elements.query.get(id)
+                        try: #запись в БЗ Elements актуального состояния элемента
+                            actstate.actualstate = st.state
+                            db.session.commit()
+                        except:
+                            db.session.rollback()
+                            return "Очко"
+                    finally:
+                        logs.close()
+                except FileNotFoundError:
+                    print("Невозможно открыть файл")
+            elif st.condition == " ":
+                didi = (round(new_list.count("+") / len(new_list), 2)) #определяется вероятность данного состояния путем вычисления отношения + к общему числу
+            else:
+                didi = 0
+            itog_list.append(didi) #формирование вектора состояния в One-hot
+    if 1 not in itog_list: #если полная уверенность в определенном состоянии - вероятности зануляются
+        itog_list = [round(el / sum(itog_list), 2) for el in itog_list] #для нормирования вероятностей в диапазоне 0-1
+        #print(itog_list)
+        try:
+            logs = open("logs.txt", "a")
+            try:
+                logs.write("  ")
+                logs.write(a)
+                logs.write("  ")
+                for n in itog_list:
+                    logs.write(str(n))
+                logs.write("\n")
+            finally:
+                logs.close()
+        except FileNotFoundError:
+            print("Невозможно открыть файл")
+    else: #если отсутствует полная уверенность в определенном состоянии - показываются вероятности
+        itog_list = [math.floor(el) for el in itog_list]
+        il = itog_list
+    try:
+        logs = open("logs.txt", "a")
+        try:
+            logs.write("  ")
+            logs.write(a)
+            logs.write("  ")
+            for n in itog_list:
+                logs.write(str(n))
+            logs.write("\n")
+        finally:
+            logs.close()
+    except FileNotFoundError:
+        print("Невозможно открыть файл")
+    il = itog_list
+    #print(il)
+    return (il)
+
+#rulesappl(10) #для проверки
+
