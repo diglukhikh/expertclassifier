@@ -1,0 +1,17 @@
+#запись правил для элементов с классификаторов на правилах
+@app.route('/rules/<int:id>', methods=['GET', 'POST'])
+def rules(id):
+    name = Elements.query.get_or_404(id)
+    if request.method == "POST":
+        try:
+            element = Elements.query.get_or_404(id)
+            p = Parametres(state=request.form['state'], condition=request.form['condition'],
+                 parametres=request.form['parametres'], values=request.form['values'], user_id=element.id,
+                           combine=request.form['values']+str(element.id)+request.form['parametres'])
+            db.session.add(p)
+            db.session.commit()
+        except:
+            db.session.rollback()
+            print("Ошибка добавления в БД")
+        return redirect("/elements")
+    return render_template("rules.html", element=name)
